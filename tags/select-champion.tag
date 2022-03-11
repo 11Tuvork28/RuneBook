@@ -28,6 +28,10 @@
               <input type="checkbox" tabindex="0" class="hidden">
               <label id="autochamp-label"><i1-8n>champion.autopick</i1-8n></label>
             </div>
+            <div class="ui toggle checkbox" id="autoaccept">
+              <input type="checkbox" tabindex="0">
+              <label id="autoaccept-label"><i1-8n>game.autoaccept</i1-8n></label>
+            </div>
           </div>
 
         </div>
@@ -36,8 +40,8 @@
     </div>
   </div>
   
-  <div class="ui popup" style="width: 250px;"><i1-8n>champion.autopick.tooltip</i1-8n></div>
-
+  <div class="ui popup autochamp" style="width: 250px;"><i1-8n>champion.autopick.tooltip</i1-8n></div>
+  <div class="ui popup autoaccept" style="width: 250px;"><i1-8n>game.autoaccept.tooltip</i1-8n></div>
   <style>
     .tiny-ring {
       width: 84px;
@@ -92,7 +96,7 @@
 
       $("#autochamp-label").popup({
         position: "bottom right",
-        popup: '.ui.popup',
+        popup: '.ui.popup.autochamp',
         delay: {
           show: 800,
           hide: 0
@@ -107,13 +111,32 @@
           onUnchecked: () => {
             freezer.emit("autochamp:disable");
           }
-        })
-      ;
+        });
 
+      $("#autoaccept-label").popup({
+          position: "bottom right",
+          popup: '.ui.popup.autoaccept',
+          delay: {
+              show: 800,
+              hide: 0
+          }
+      });
       if(freezer.get().autochamp) {
         $('#autochamp').checkbox("check");
       }
-
+      
+      $('#autoaccept')
+        .checkbox({
+          onChecked: () => {
+            freezer.emit("autoaccept:enable");
+          },
+          onUnchecked: () => {
+             freezer.emit("autoaccept:disable");
+          }
+      });
+      if(freezer.get().autoaccept) {
+        $('#autoaccept').checkbox("check");
+      }
       // Force event again, in case api connection is slower than ddragon requests
       freezer.on("api:connected", () => {
         if(freezer.get().autochamp) {
