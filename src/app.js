@@ -3,6 +3,24 @@ var freezer = require('./state');
 var fs = require('fs');
 const isDev = !require('electron').remote.require('electron').app.isPackaged;
 const { groupBy } = require('lodash');
+const LANG_CODES = {
+	cz: 'cs_CZ',
+	de: 'de_DE',
+	en: 'en_US',
+	fr: 'fr_FR',
+	gr: 'el_GR',
+	es: 'es_ES',
+	hu: 'hu_HU',
+	it: 'it_IT',
+	pl: 'pl_PL',
+	pt_br: 'pt_BR',
+	pt: 'en_US',// lol doesnt have these in ther lang codes
+	ro: 'ro_RO',
+	rs: 'en_US',
+	ru: 'ru_RU',
+	se: 'en_US',
+	tr: 'tr_TR'
+}
 
 if (settings.get("darktheme") == null) {
 	const { nativeTheme } = require('electron').remote.require('electron')
@@ -79,6 +97,7 @@ freezer.on("favautoupload:switch", (val) => {
 freezer.on("lang:update", (val) => {
 	freezer.get().configfile.set("lang", val);
 	settings.set("lang", val);
+	getItemsJson(freezer.get().lolversions[0], val || 'en_US');
 });
 
 (setMinimizeButtonBehaviour = () => {
@@ -144,14 +163,7 @@ freezer.on('version:set', (ver) => {
 		}
 		else throw Error("Couldn't fetch champions.json from ddragon.")
 	});
-	request('https://ddragon.leagueoflegends.com/cdn/' + ver + '/data/en_US/item.json',
-		function (error, response, data) {
-			if (!error && response && response.statusCode == 200) {
-				freezer.get().set("itemsinfo", JSON.parse(data).data);
-				freezer.emit("itemsinfo:set");
-			} else throw Error("Couldn't fetch item.json from ddragon.");
-		}
-	);
+	getItemsJson(ver, freezer.get().configfile.lang || 'en_US');
 });
 
 freezer.on('api:connected', () => {
@@ -341,7 +353,7 @@ freezer.on('page:upload', (champion, pagename) => {
 });
 //upload items to client
 freezer.on("items:upload", (champ, role, map, itemset) => {
-	forgeItemSet(champ.replace(/^\w/, (c) => c.toUpperCase()), role, map, itemset.raw_data);
+	forgeItemSet(champ.replace(/^\w/, (c) => c.toUpperCase()), role, map, itemset);
 });
 
 //delete item set
@@ -556,6 +568,7 @@ function getPagesWrapper(plugin, champion, callback) {
 
 			// Take over sorting from "prepareRunePage" (if not sorted correctly by plugin)
 			res.pages[key].selectedPerkIds = res.pages[key].prepareRunePage.selectedPerkIds;
+			// Checks if the plugin exports itemset
 		});
 
 		// Return
@@ -680,8 +693,11 @@ function forgeItemSet(champ, role, map, itemset) {
 				fs.writeFile(path + file, JSON.stringify(data), "UTF8", (err) => {
 					if (err) console.Error(err);
 				});
-			}
-			)
+			});
+		} else {
+			fs.writeFile(path + file, JSON.stringify(data), "UTF8", (err) => {
+				if (err) console.Error(err);
+			});
 		}
 	});
 }
@@ -737,5 +753,42 @@ function getPathForItemSet(champ) {
 	else {
 		return path = freezer.get().configfile.leaguepath.replace("LeagueClient.exe", "") + `Config\\Champions\\${champ}\\Recommended\\`;
 	}
+}
+
+/**
+ * A helper methode to get the name of an item per id
+ * @param {object} runesJson The object that contains the page and item set info
+ * @param {string} key The key to get from the object
+ * @returns An array of item names or an empty array if the key wasn't found
+ */
+function getItemArray(runesJson, key) {
+	const itemsmap = freezer.get().itemsinfo;
+	if (runesJson["stats"][key].build != null) {
+		return runesJson["stats"][key].build.map((item) => {
+			try {
+				return itemsmap[item].name;
+			} catch (error) {
+				return "Unknown Item";
+			}
+		});
+	} else return [];
+}
+
+/**
+ * Loads item info from ddragon
+ * @param {string} ver The version of the game
+ * @param {string} lang The current language of RuneBook
+ * @returns nothing
+ * @throws Unable to fetch item info
+ */
+function getItemsJson(ver, lang) {
+	request('https://ddragon.leagueoflegends.com/cdn/' + ver + '/data/' + LANG_CODES[freezer.get().configfile.lang] + '/item.json',
+		function (error, response, data) {
+			if (!error && response && response.statusCode == 200) {
+				freezer.get().set("itemsinfo", JSON.parse(data).data);
+				freezer.emit("itemsinfo:set");
+			} else throw Error("Couldn't fetch item.json from ddragon.");
+		}
+	);
 }
 // #endregion
