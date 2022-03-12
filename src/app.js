@@ -681,6 +681,8 @@ function forgeItemSet(champ, role, map, itemset) {
 					if (err) console.Error(err);
 				});
 			}
+			)
+		}
 	});
 }
 
