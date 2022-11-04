@@ -6,7 +6,7 @@ const { removePerkIds } = require('./utils');
 const supported_modes = [
     {
         role: ["MID","SUPPORT","ADC","JUNGLE","TOP"],
-        queue: "RANKED_FLEX_SR",
+        queue: "RANKED_SOLO_5X5",
 
     },
     {
@@ -16,7 +16,7 @@ const supported_modes = [
 ];
 const friendly_names = {
     "HOWLING_ABYSS_ARAM": "ARAM",
-    "RANKED_FLEX_SR":" RANKED FLEX",
+    "RANKED_SOLO_5X5": "Ranked",
 }
 baseUrl = 'https://league-champion-aggregate.iesdev.com/graphql?query=query ChampionBuilds($championId:Int!,$queue:Queue!,$role:Role,$opponentChampionId:Int,$key:ChampionBuildKey){championBuildStats(championId:$championId,queue:$queue,role:$role,opponentChampionId:$opponentChampionId,key:$key){championId opponentChampionId queue role builds{completedItems{games index averageIndex itemId wins}games mythicId mythicAverageIndex primaryRune runes{games index runeId wins treeId}skillOrders{games skillOrder wins}startingItems{games startingItemIds wins}summonerSpells{games summonerSpellIds wins}wins}}}&variables='
 
@@ -82,13 +82,61 @@ function getPage(runesJson, champInfo, queue, role) {
     try {
         // Break Json down to the perks data and stat shards
         const perksData = runesJson["runes"];
+
+        const runes = [];
+        let tree = 0;
+        // Select highest winrate out of all options (unfortunately sofar I think I have to ignore how many matches are played, since that would need better evaluation)
+        for(let i = 0; i < 8; i++){
+            // Grab candidates for each slot and calculate their winrate
+            let candidatesPre = perksData.filter(x => x.index === i).map(x => {
+                const wr = x.wins / x.games;
+                x.winrate = wr;
+                return x;
+            });
+            let candidates = [];
+
+            // If the second perk of the second tree => only allow candidates of the same tree
+            if(i === 4){
+                candidates = candidatesPre.filter(x => x.treeId === tree);
+            }
+            else {
+                candidates = candidatesPre;
+            }
+            // Select the highest winrate
+            let highestWr;
+            try {
+                highestWr = candidates.reduce((prev, curr) => (prev.winrate > curr.winrate) ? prev : curr);
+            }
+            catch(e){
+                // Seems to happen in rare cases with api bugs ? 
+                highestWr = {runeId: 0};
+            }
+
+            // store the treeId
+            if(i === 3){
+                tree = highestWr.treeId;
+            }
+            // Return only the ID
+            runes.push(highestWr.runeId);
+        }
+
+
         //const statShards = runesJson["championBuildStats"]["most_common_rune_stat_shards"]["build"];
-        perksData.push(runesJson["primaryRune"]);
+        
+        // Add the primary rune 
+        runes.push(runesJson["primaryRune"]);
         // Determine selected perk ids
-        const selectedPerkIds = removePerkIds(perksData.map(runeInfo =>  runeInfo.runeId));//.concat(statShards);
+        const selectedPerkIds = removePerkIds(runes);//.concat(statShards);
+        // console.log(selectedPerkIds);
+        // Determine if a role exists (for display purposes, otherwise ARAM would show "null" as role.)
+        let roleString = role ? role : "";
+
+        // And capitalize it for consistency (should not care in case its an empty string)
+        roleString = roleString.charAt(0).toUpperCase() + roleString.slice(1).toLowerCase();
+
         // Return rune page
         return {
-            name: `[${friendly_names[queue]}] ${champInfo.name} ${role}`.trim(),
+            name: `[${friendly_names[queue]}] ${champInfo.name} ${roleString}`.trim(),
             selectedPerkIds: selectedPerkIds,
             bookmark: {
                 champId: champInfo.id,
@@ -131,7 +179,6 @@ async function getPagesForGameModeAsync(champInfo, queue, role) {
     } catch (e) {
         throw Error(e);
     }
-    console.log(returnVal);
     // Return list of the rune page
     return returnVal;
 }
